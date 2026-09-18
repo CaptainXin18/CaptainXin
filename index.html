@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Kitty每日英语小课堂</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    kittyPink: '#FFC0CB',
+                    kittyDeepPink: '#FF8DA1',
+                    kittyLight: '#FFF0F5',
+                },
+                fontFamily: {
+                    cute: ['"Microsoft YaHei"', 'sans-serif'],
+                }
+            }
+        }
+    }
+</script>
+<style>
+    body {
+        background-color: #FFF8FB;
+        background-image:
+            radial-gradient(circle at 20% 20%, #FFE4F1 0 8%, transparent 9%),
+            radial-gradient(circle at 80% 10%, #FFD6E7 0 6%, transparent 7%),
+            radial-gradient(circle at 40% 80%, #FFE1F0 0 7%, transparent 8%),
+            radial-gradient(circle at 70% 70%, #FFD1E6 0 5%, transparent 6%);
+    }
+    .kitty-card {
+        transition: all 0.25s ease;
+    }
+    .kitty-card:active {
+        transform: scale(0.96);
+    }
+    .bounce-in {
+        animation: bounceIn 0.4s ease;
+    }
+    @keyframes bounceIn {
+        0% { transform: scale(0.7); opacity: 0; }
+        60% { transform: scale(1.06); opacity: 1; }
+        100% { transform: scale(1); }
+    }
+    .heart-float {
+        position: fixed;
+        font-size: 24px;
+        pointer-events: none;
+        animation: floatUp 1.2s ease-out forwards;
+        z-index: 50;
+    }
+    @keyframes floatUp {
+        0% { transform: translateY(0) scale(0.8); opacity: 1; }
+        100% { transform: translateY(-120px) scale(1.2); opacity: 0; }
+    }
+</style>
+</head>
+<body class="min-h-screen font-cute py-6 px-4">
+    <div class="max-w-md mx-auto">
+        <!-- 头部：Hello Kitty图片 -->
+        <div class="text-center mb-6">
+            <img
+                src="https://ts1.tc.mm.bing.net/th/id/R-C.46bca01b5ef850d6ba573e7ca56e3bb7?rik=AnfTyID1E0AtRQ&riu=http%3a%2f%2fn.sinaimg.cn%2fsinakd20121%2f762%2fw1000h562%2f20241102%2f8584-baede10b510bf642f978d08cb29834b5.jpg&ehk=3eryNKgttcEdutMkpmFUrAQZWm5EPokdlJBRoRSJvfU%3d&risl=&pid=ImgRaw&r=0"
+                alt="Kitty"
+                class="w-48 mx-auto rounded-3xl shadow-md shadow-pink-200 border-4 border-kittyPink"
+            />
+            <h1 class="text-3xl text-kittyDeepPink font-bold mt-4">🎀 Kitty每日英语小课堂 🎀</h1>
+            <p class="text-gray-500 mt-2 text-sm">每天5句口语，一点点变厉害～</p>
+        </div>
+        <!-- 进度提示 -->
+        <div class="bg-white rounded-full shadow-sm border-2 border-kittyPink px-4 py-2 mb-5 flex justify-between items-center">
+            <span class="text-kittyDeepPink text-sm font-bold">学习进度</span>
+            <span id="progressText" class="text-kittyDeepPink text-sm font-bold">1 / 5</span>
+        </div>
+
+        <!-- 句子学习区（JS动态渲染，不需要手写5个div） -->
+        <div class="space-y-4" id="lessonArea">
+            <div id="cardContainer"></div>
+            <!-- 点击解锁按钮 -->
+            <button
+                id="nextBtn"
+                class="w-full bg-kittyDeepPink hover:bg-pink-500 active:bg-pink-600 text-white font-bold py-4 rounded-full shadow-lg shadow-pink-300 text-lg mt-4"
+            >
+                我学会啦，下一句 ✨
+            </button>
+        </div>
+
+        <!-- 底部鼓励语 -->
+        <div class="text-center mt-8 text-gray-400 text-sm">
+            <p>💕 给丹丹的每日英语小练习 💕</p>
+        </div>
+    </div>
+
+    <!-- 完成弹窗 -->
+    <div id="finishModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-3xl p-8 mx-6 text-center shadow-2xl border-4 border-kittyPink bounce-in">
+            <img
+                src="https://ts1.tc.mm.bing.net/th/id/R-C.46bca01b5ef850d6ba573e7ca56e3bb7?rik=AnfTyID1E0AtRQ&riu=http%3a%2f%2fn.sinaimg.cn%2fsinakd20121%2f762%2fw1000h562%2f20241102%2f8584-baede10b510bf642f978d08cb29834b5.jpg&ehk=3eryNKgttcEdutMkpmFUrAQZWm5EPokdlJBRoRSJvfU%3d&risl=&pid=ImgRaw&r=0"
+                alt="Kitty"
+                class="w-32 mx-auto rounded-2xl border-4 border-kittyPink"
+            />
+            <h2 class="text-2xl text-kittyDeepPink font-bold mt-4">太棒了丹丹！</h2>
+            <p id="randomEncourageText" class="text-gray-600 mt-2"></p>
+            <button
+                id="restartBtn"
+                class="mt-5 bg-kittyDeepPink text-white font-bold px-6 py-3 rounded-full shadow-md"
+            >
+                再学一次
+            </button>
+        </div>
+    </div>
+
+<script>
+// ===================== 【每天在这里修改5句英语！】=====================
+// 每天只需要修改这里，不用动HTML，英文、中文一一对应
+const dailySentences = [
+    { en: "Take it easy.", zh: "放轻松" },
+    { en: "Are you serious?", zh: "你是认真的吗？" },
+    { en: "What’s going on?", zh: "怎么个事？" },
+    { en: "My turn.", zh: "轮到我了" },
+    { en: "Not bad.", zh: "还不错" }
+];
+
+// 完成后随机鼓励话术，可以自己增删
+const encourageList = [
+    "坚持每天学习，英语会越来越厉害🎀",
+    "丹丹超棒，日积月累就会有很大进步✨",
+    "小猫为你鼓掌，继续加油哦💖",
+    "小小的积累，会带来大大的收获！",
+    "今日任务完成，给自己点个赞👍",
+    "Kitty看到你的努力啦，再接再厉！",
+    "每天进步一点点，未来闪闪发光🌟"
+];
+// =====================================================================
+
+const cardContainer = document.getElementById('cardContainer');
+const progressText = document.getElementById('progressText');
+const nextBtn = document.getElementById('nextBtn');
+const finishModal = document.getElementById('finishModal');
+const restartBtn = document.getElementById('restartBtn');
+const randomEncourageText = document.getElementById('randomEncourageText');
+
+let currentStep = 1;
+let cardDomList = [];
+
+// 渲染卡片，第1句显示其余隐藏
+function renderCards() {
+    cardContainer.innerHTML = '';
+    cardDomList = [];
+    dailySentences.forEach((item, idx)=>{
+        const div = document.createElement('div');
+        div.className = `kitty-card bg-white rounded-3xl p-5 shadow-lg shadow-pink-200 border-2 border-kittyPink ${idx>0 ? 'hidden' : ''}`;
+        div.innerHTML = `
+            <div class="text-kittyDeepPink font-bold text-xl">${item.en}</div>
+            <div class="text-gray-600 mt-1">${item.zh}</div>
+        `;
+        cardContainer.appendChild(div);
+        cardDomList.push(div);
+    })
+    progressText.textContent = `1 / ${dailySentences.length}`;
+}
+
+/**
+ * 🐱 新版：模拟柔和长音 "喵~"
+ */
+function playCatMeow() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.type = 'sine';
+        // 喵~：音调先抬升再缓缓下落，长音
+        osc.frequency.setValueAtTime(520, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(780, audioCtx.currentTime + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.45);
+
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.30, audioCtx.currentTime + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.55);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.55);
+    } catch (e) {
+        console.log("音效播放失败：", e);
+    }
+}
+
+// 飘爱心特效
+function showHeart(x, y) {
+    const heart = document.createElement('div');
+    heart.className = 'heart-float';
+    heart.innerText = '💖';
+    heart.style.left = x + 'px';
+    heart.style.top = y + 'px';
+    document.body.appendChild(heart);
+    setTimeout(() => heart.remove(), 1200);
+}
+
+// 获取随机鼓励语句
+function getRandomEncourage(){
+    const idx = Math.floor(Math.random() * encourageList.length);
+    return encourageList[idx];
+}
+
+// 下一句按钮点击事件
+nextBtn.addEventListener('click', function(e) {
+    playCatMeow();
+    showHeart(e.clientX, e.clientY);
+    const total = dailySentences.length;
+
+    if (currentStep < total) {
+        // 展示下一张卡片
+        cardDomList[currentStep].classList.remove('hidden');
+        cardDomList[currentStep].classList.add('bounce-in');
+        currentStep += 1;
+        progressText.textContent = `${currentStep} / ${total}`;
+        setTimeout(()=>{
+            cardDomList[currentStep-1].scrollIntoView({behavior:"smooth", block:"center"});
+        },120);
+    }
+
+    // 已经到最后一题，修改按钮文字
+    if(currentStep === total){
+        nextBtn.textContent = '完成学习 🎀';
+    }
+
+    // ✅修复：到达最后一步，再次点击按钮才弹出完成弹窗，在这里取随机文案
+    if(currentStep === total && nextBtn.textContent === '完成学习 🎀'){
+        // 赋值随机鼓励！
+        randomEncourageText.innerText = getRandomEncourage();
+        finishModal.classList.remove('hidden');
+        finishModal.classList.add('flex');
+        playCatMeow();
+        setTimeout(playCatMeow, 350);
+        // 防止重复触发
+        currentStep += 1;
+    }
+})
+
+// 重新开始按钮
+restartBtn.addEventListener('click', function() {
+    finishModal.classList.add('hidden');
+    finishModal.classList.remove('flex');
+    currentStep = 1;
+    renderCards();
+    nextBtn.textContent = '我学会啦，下一句 ✨';
+})
+
+window.onload = function(){
+    renderCards();
+}
+</script>
+</body>
+</html>
