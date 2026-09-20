@@ -136,7 +136,6 @@
     </div>
 <script>
 // ===================== 【每天在这里修改5句英语！】=====================
-// 每天只需要修改这里，不用动HTML，英文、中文一一对应
 const dailySentences = [
     { en: "Are you kidding me？", zh: "你在开玩笑吧？" },
     { en: "I hope so", zh: "我希望如此" },
@@ -144,7 +143,6 @@ const dailySentences = [
     { en: "Trust me. ", zh: "相信我" },
     { en: "I see.", zh: "我明白了" }
 ];
-// 完成后随机鼓励话术，可以自己增删
 const encourageList = [
     "坚持每天学习，英语会越来越厉害🎀",
     "丹丹超棒，日积月累就会有很大进步✨",
@@ -163,20 +161,25 @@ const restartBtn = document.getElementById('restartBtn');
 const randomEncourageText = document.getElementById('randomEncourageText');
 let currentStep = 1;
 let cardDomList = [];
+// 缓存语音列表
+let voiceList = [];
+// 监听语音加载，手机等待voices加载完成
+function loadVoices() {
+    voiceList = window.speechSynthesis.getVoices();
+}
+// 监听语音变化事件（手机关键修复）
+window.speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
 
 // 语音朗读核心函数
 function readEnglish(text, btnEl) {
-    // 停止当前正在播放的语音
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    // 优先使用英文女声
-    const voices = window.speechSynthesis.getVoices();
-    const enVoice = voices.find(v => v.lang.startsWith('en'));
+    // 优先英文女声，没有就用默认语音，不会报错
+    const enVoice = voiceList.find(v => v.lang.startsWith('en'));
     if (enVoice) utterance.voice = enVoice;
-    utterance.rate = 0.95; // 语速稍微放慢，适合跟读
+    utterance.rate = 0.95;
     utterance.pitch = 1;
-
-    // 按钮加载状态
     btnEl.classList.add('loading');
     utterance.onend = () => {
         btnEl.classList.remove('loading');
@@ -187,7 +190,7 @@ function readEnglish(text, btnEl) {
     window.speechSynthesis.speak(utterance);
 }
 
-// 渲染卡片，第1句显示其余隐藏（新增喇叭按钮）
+// 渲染卡片，【优先渲染！不受语音加载影响！】
 function renderCards() {
     cardContainer.innerHTML = '';
     cardDomList = [];
@@ -205,8 +208,6 @@ function renderCards() {
         `;
         cardContainer.appendChild(div);
         cardDomList.push(div);
-
-        // 绑定喇叭点击朗读事件
         const speakBtn = div.querySelector('.speak-btn');
         speakBtn.addEventListener('click', () => {
             readEnglish(item.en, speakBtn);
@@ -215,30 +216,6 @@ function renderCards() {
     progressText.textContent = `1 / ${dailySentences.length}`;
 }
 
-/**
- * 🐱 新版：模拟柔和长音 "喵~"
- */
-function playCatMeow() {
-    try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = 'sine';
-        // 喵~：音调先抬升再缓缓下落，长音
-        osc.frequency.setValueAtTime(520, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(780, audioCtx.currentTime + 0.12);
-        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.45);
-        gain.gain.setValueAtTime(0, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.30, audioCtx.currentTime + 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.55);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.55);
-    } catch (e) {
-        console.log("音效播放失败：", e);
-    }
-}
 // 飘爱心特效
 function showHeart(x, y) {
     const heart = document.createElement('div');
@@ -249,18 +226,17 @@ function showHeart(x, y) {
     document.body.appendChild(heart);
     setTimeout(() => heart.remove(), 1200);
 }
+
 // 获取随机鼓励语句
 function getRandomEncourage(){
     const idx = Math.floor(Math.random() * encourageList.length);
     return encourageList[idx];
 }
-// ==========【修复后的点击逻辑】==========
+
+// ==========【点击逻辑】==========
 nextBtn.addEventListener('click', function(e) {
-    playCatMeow();
     showHeart(e.clientX, e.clientY);
     const total = dailySentences.length;
-
-    // 情况1：还没展示完所有句子，继续显示下一句卡片
     if (currentStep < total) {
         cardDomList[currentStep].classList.remove('hidden');
         cardDomList[currentStep].classList.add('bounce-in');
@@ -269,17 +245,13 @@ nextBtn.addEventListener('click', function(e) {
         setTimeout(()=>{
             cardDomList[currentStep-1].scrollIntoView({behavior:"smooth", block:"center"});
         },120);
-        // 当currentStep等于总数，修改按钮文字，不弹弹窗！
         if(currentStep === total){
             nextBtn.textContent = '完成学习 🎀';
         }
     } else {
-        // 情况2：已经展示完全部句子，再次点击按钮，弹出完成弹窗
         randomEncourageText.innerText = getRandomEncourage();
         finishModal.classList.remove('hidden');
         finishModal.classList.add('flex');
-        playCatMeow();
-        setTimeout(playCatMeow, 350);
     }
 })
 // 重新开始按钮
@@ -290,9 +262,8 @@ restartBtn.addEventListener('click', function() {
     renderCards();
     nextBtn.textContent = '我学会啦，下一句 ✨';
 })
+// 页面加载【优先渲染句子卡片！】，不再等待语音，保证手机一定能看到句子
 window.onload = function(){
-    // 预加载语音音色（解决首次朗读无声）
-    window.speechSynthesis.getVoices();
     renderCards();
 }
 </script>
