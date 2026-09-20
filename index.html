@@ -57,15 +57,15 @@
     }
     /* 喇叭按钮样式 */
     .speak-btn {
-        width: 36px;
-        height: 36px;
+        width: 44px;
+        height: 44px;
         flex-shrink: 0;
         display: grid;
         place-items: center;
         background: #FF8DA1;
         color: white;
         border-radius: 50%;
-        font-size: 18px;
+        font-size: 20px;
         cursor: pointer;
         transition: 0.2s;
         user-select: none;
@@ -100,7 +100,7 @@
             <span class="text-kittyDeepPink text-sm font-bold">学习进度</span>
             <span id="progressText" class="text-kittyDeepPink text-sm font-bold">1 / 5</span>
         </div>
-        <!-- 句子学习区（JS动态渲染，不需要手写5个div） -->
+        <!-- 句子学习区 -->
         <div class="space-y-4" id="lessonArea">
             <div id="cardContainer"></div>
             <!-- 点击解锁按钮 -->
@@ -161,36 +161,44 @@ const restartBtn = document.getElementById('restartBtn');
 const randomEncourageText = document.getElementById('randomEncourageText');
 let currentStep = 1;
 let cardDomList = [];
-// 缓存语音列表
-let voiceList = [];
-// 监听语音加载，手机等待voices加载完成
-function loadVoices() {
-    voiceList = window.speechSynthesis.getVoices();
-}
-// 监听语音变化事件（手机关键修复）
-window.speechSynthesis.onvoiceschanged = loadVoices;
-loadVoices();
+let audioPlayer = new Audio();
 
-// 语音朗读核心函数
+// Bingo音效（采用本地WebAudio生成，无网络依赖，手机微信完美兼容）
+function playBingo() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(1320, audioContext.currentTime + 0.12);
+        oscillator.type = 'sine';
+        gainNode.gain.setValueAtTime(0.25, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.35);
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.35);
+    } catch (e) {
+        console.log('音效播放异常', e);
+    }
+}
+
+// 谷歌翻译TTS 美式英文朗读
 function readEnglish(text, btnEl) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    // 优先英文女声，没有就用默认语音，不会报错
-    const enVoice = voiceList.find(v => v.lang.startsWith('en'));
-    if (enVoice) utterance.voice = enVoice;
-    utterance.rate = 0.95;
-    utterance.pitch = 1;
     btnEl.classList.add('loading');
-    utterance.onend = () => {
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(text)}`;
+    audioPlayer.src = ttsUrl;
+    audioPlayer.play().then(()=>{
+        audioPlayer.onended = ()=>{
+            btnEl.classList.remove('loading');
+        }
+    }).catch(err=>{
         btnEl.classList.remove('loading');
-    };
-    utterance.onerror = () => {
-        btnEl.classList.remove('loading');
-    };
-    window.speechSynthesis.speak(utterance);
+        alert("播放失败，可以切换手机自带浏览器打开");
+    })
 }
 
-// 渲染卡片，【优先渲染！不受语音加载影响！】
+// 渲染卡片，全部显示喇叭按钮
 function renderCards() {
     cardContainer.innerHTML = '';
     cardDomList = [];
@@ -233,8 +241,9 @@ function getRandomEncourage(){
     return encourageList[idx];
 }
 
-// ==========【点击逻辑】==========
+// 下一句按钮点击逻辑
 nextBtn.addEventListener('click', function(e) {
+    playBingo(); // 点击立刻播放bingo提示音
     showHeart(e.clientX, e.clientY);
     const total = dailySentences.length;
     if (currentStep < total) {
@@ -252,17 +261,20 @@ nextBtn.addEventListener('click', function(e) {
         randomEncourageText.innerText = getRandomEncourage();
         finishModal.classList.remove('hidden');
         finishModal.classList.add('flex');
+        playBingo(); // 弹出完成弹窗再次播放bingo
     }
 })
+
 // 重新开始按钮
 restartBtn.addEventListener('click', function() {
+    playBingo(); // 重置页面时播放bingo
     finishModal.classList.add('hidden');
     finishModal.classList.remove('flex');
     currentStep = 1;
     renderCards();
     nextBtn.textContent = '我学会啦，下一句 ✨';
 })
-// 页面加载【优先渲染句子卡片！】，不再等待语音，保证手机一定能看到句子
+
 window.onload = function(){
     renderCards();
 }
