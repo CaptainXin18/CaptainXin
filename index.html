@@ -81,6 +81,24 @@
         background: #ccc;
         pointer-events: none;
     }
+    /* 底部轻提示（替代吓人的alert弹窗） */
+    #kittyToast {
+        position: fixed;
+        left: 50%;
+        bottom: 18%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-size: 14px;
+        z-index: 99;
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none;
+        max-width: 80%;
+        text-align: center;
+    }
 </style>
 </head>
 <body class="min-h-screen font-cute py-6 px-4">
@@ -134,13 +152,15 @@
             </button>
         </div>
     </div>
+    <!-- 底部轻提示 -->
+    <div id="kittyToast"></div>
 <script>
 // ===================== 【每天在这里修改5句英语！】=====================
 const dailySentences = [
-    { en: "Are you kidding me？", zh: "你在开玩笑吧？" },
-    { en: "I hope so", zh: "我希望如此" },
-    { en: "What’s wrong with you?", zh: "你有毛病吧？" },
-    { en: "Trust me. ", zh: "相信我" },
+    { en: "Are you kidding me?", zh: "你在开玩笑吧？" },
+    { en: "I hope so.", zh: "我希望如此" },
+    { en: "What's wrong with you?", zh: "你有毛病吧？" },
+    { en: "Trust me.", zh: "相信我" },
     { en: "I see.", zh: "我明白了" }
 ];
 const encourageList = [
@@ -161,7 +181,115 @@ const restartBtn = document.getElementById('restartBtn');
 const randomEncourageText = document.getElementById('randomEncourageText');
 let currentStep = 1;
 let cardDomList = [];
-let audioPlayer = new Audio();
+
+// ===================== 语音朗读：多重保险方案 =====================
+// 依次尝试：有道TTS(国内直连) → 谷歌备用域名 → 谷歌官方(需科学上网)
+// 全部失败时，最后用手机自带的离线语音合成，基本保证任何手机都能读
+const TTS_URL_MAKERS = [
+    t => `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(t)}`,
+    t => `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=${encodeURIComponent(t)}`,
+    t => `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=${encodeURIComponent(t)}`
+];
+let currentAudio = null;
+
+// 提前加载手机里的语音包列表（安卓需要触发一次才有数据）
+if (window.speechSynthesis) {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
+function stopAllAudio() {
+    if (currentAudio) {
+        try { currentAudio.pause(); } catch (e) {}
+        currentAudio.onerror = null;
+        currentAudio.onended = null;
+        currentAudio = null;
+    }
+    if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+}
+
+// 规范句子：去掉多余空格、把中文标点换成英文标点，让TTS读得更准
+function cleanSentence(text) {
+    return text.replace(/？/g, '?').replace(/！/g, '!').replace(/，/g, ',')
+               .replace(/。/g, '.').replace(/’/g, "'").replace(/\s+/g, ' ').trim();
+}
+
+function readEnglish(text, btnEl) {
+    const clean = cleanSentence(text);
+    stopAllAudio();
+    btnEl.classList.add('loading');
+    tryAudioSource(clean, btnEl, 0);
+}
+
+// 在线音源逐个尝试：某个能播就用它，播不了自动换下一个
+function tryAudioSource(text, btnEl, idx) {
+    if (idx >= TTS_URL_MAKERS.length) {
+        speakByPhone(text, btnEl); // 在线音源全挂了 → 用手机自带语音合成
+        return;
+    }
+    const audio = new Audio();
+    audio.preload = 'auto';
+    let done = false;
+    const fail = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        tryAudioSource(text, btnEl, idx + 1);
+    };
+    // 6秒还没播出来，就视为这个音源不可用，换下一个
+    const timer = setTimeout(fail, 6000);
+    audio.onerror = fail;
+    audio.onended = () => { clearTimeout(timer); btnEl.classList.remove('loading'); };
+    audio.src = TTS_URL_MAKERS[idx](text);
+    audio.play().then(() => {
+        if (done) { audio.pause(); return; }
+        done = true; // 这个音源成功，开始播放
+        clearTimeout(timer);
+        currentAudio = audio;
+    }).catch(fail);
+}
+
+// 最终兜底：手机自带的离线语音合成（不联网也能读）
+function speakByPhone(text, btnEl) {
+    const synth = window.speechSynthesis;
+    if (!synth || !window.SpeechSynthesisUtterance) {
+        btnEl.classList.remove('loading');
+        showToast('😢 朗读加载失败，请检查网络后再试');
+        return;
+    }
+    try {
+        synth.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US';
+        u.rate = 0.85; // 稍微慢一点，方便跟读
+        const voices = synth.getVoices() || [];
+        const voice = voices.find(v => v.lang && v.lang.toLowerCase().indexOf('en-us') === 0)
+                   || voices.find(v => v.lang && v.lang.toLowerCase().indexOf('en') === 0);
+        if (voice) u.voice = voice;
+        u.onend = () => btnEl.classList.remove('loading');
+        u.onerror = () => {
+            btnEl.classList.remove('loading');
+            showToast('😢 这台手机暂时读不了，换个浏览器试试～');
+        };
+        synth.speak(u);
+        // 个别手机不触发onend，8秒后自动解除按钮的加载状态
+        setTimeout(() => btnEl.classList.remove('loading'), 8000);
+    } catch (e) {
+        btnEl.classList.remove('loading');
+        showToast('😢 这台手机暂时读不了，换个浏览器试试～');
+    }
+}
+
+// 底部轻提示（替代alert，不再吓人）
+function showToast(msg) {
+    const t = document.getElementById('kittyToast');
+    t.textContent = msg;
+    t.style.opacity = 1;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.style.opacity = 0, 2500);
+}
 
 // Bingo音效（采用本地WebAudio生成，无网络依赖，手机微信完美兼容）
 function playBingo() {
@@ -183,21 +311,6 @@ function playBingo() {
     }
 }
 
-// 谷歌翻译TTS 美式英文朗读
-function readEnglish(text, btnEl) {
-    btnEl.classList.add('loading');
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(text)}`;
-    audioPlayer.src = ttsUrl;
-    audioPlayer.play().then(()=>{
-        audioPlayer.onended = ()=>{
-            btnEl.classList.remove('loading');
-        }
-    }).catch(err=>{
-        btnEl.classList.remove('loading');
-        alert("播放失败，可以切换手机自带浏览器打开");
-    })
-}
-
 // 渲染卡片，全部显示喇叭按钮
 function renderCards() {
     cardContainer.innerHTML = '';
@@ -211,7 +324,7 @@ function renderCards() {
                     <div class="text-kittyDeepPink font-bold text-xl sentence-en">${item.en}</div>
                     <div class="text-gray-600 mt-1">${item.zh}</div>
                 </div>
-                <div class="speak-btn" data-en="${item.en}" title="点击朗读句子">🔊</div>
+                <div class="speak-btn" title="点击朗读句子">🔊</div>
             </div>
         `;
         cardContainer.appendChild(div);
@@ -245,6 +358,7 @@ function getRandomEncourage(){
 nextBtn.addEventListener('click', function(e) {
     playBingo(); // 点击立刻播放bingo提示音
     showHeart(e.clientX, e.clientY);
+    stopAllAudio(); // 切换句子时停掉上一句的朗读
     const total = dailySentences.length;
     if (currentStep < total) {
         cardDomList[currentStep].classList.remove('hidden');
@@ -268,6 +382,7 @@ nextBtn.addEventListener('click', function(e) {
 // 重新开始按钮
 restartBtn.addEventListener('click', function() {
     playBingo(); // 重置页面时播放bingo
+    stopAllAudio();
     finishModal.classList.add('hidden');
     finishModal.classList.remove('flex');
     currentStep = 1;
